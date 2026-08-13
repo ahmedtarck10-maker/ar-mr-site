@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AR/MR — Liquid Glass Viewer</title>
+
+  <!-- model-viewer for GLB preview + AR hinting -->
+  <script type="module" src="https://unpkg.com/@google/model-viewer@1.12.0/dist/model-viewer.min.js"></script>
+  <!-- html2canvas for screenshots -->
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b1220; --card:#07102999; --glass:#ffffff22; --accent:#0ab0c9; --muted:#aac6d6;
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"SF Pro Text","Helvetica Neue",Arial;color:#e6f0f6;background:linear-gradient(180deg,#071029 0%, #091428 100%);}
+    .app{display:flex;height:100vh;gap:18px;padding:18px;box-sizing:border-box;max-width:1200px;margin:0 auto;}
+    .sidebar{width:320px;min-width:260px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:18px;padding:12px;backdrop-filter:blur(10px);box-shadow:0 6px 30px rgba(2,6,23,0.6);display:flex;flex-direction:column;gap:10px}
+    .topbar{height:74px;border-radius:14px;padding:12px;display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.03);backdrop-filter:blur(12px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.03)}
+    .avatar{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#0df,#06b);display:flex;align-items:center;justify-content:center;font-weight:700;color:#012}
+    h1{font-size:15px;margin:0}
+    .small{font-size:13px;color:var(--muted)}
+    .main{flex:1;display:flex;flex-direction:column;gap:12px}
+    .viewerCard{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:18px;padding:12px;min-height:420px;display:flex;flex-direction:column;gap:12px;backdrop-filter:blur(8px)}
+    #viewerWrap{flex:1;display:flex;gap:10px;align-items:stretch}
+    model-viewer{width:100%;height:100%;border-radius:12px;background:#e6eef84d;overflow:hidden}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn{background:var(--accent);color:#042033;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#e6f0f6}
+    .meta{font-size:13px;color:var(--muted)}
+    .inputFile{display:block;margin-top:8px}
+    .footerRow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    a.link{color:var(--accent);text-decoration:underline}
+    @media (max-width:900px){.app{flex-direction:column}.sidebar{width:100%;min-width:unset}.main{width:100%}}
+    /* small styles for split MR button */
+    .split-on model-viewer.left { display:block; width:50%; }
+    .split-on model-viewer.right { display:block; width:50%; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="topbar">
+        <div class="avatar">AR</div>
+        <div>
+          <h1>AR/MR — Liquid</h1>
+          <div class="small">اختبار Split‑MR و Quick Look</div>
+        </div>
+      </div>
+
+      <div style="margin-top:auto">
+        <div class="small">ملاحظة: Quick Look (USDZ) يعمل أفضل على iPhone Safari مع رابط HTTPS أو عبر خادم يضبط Content-Type المناسب.</div>
+        <div style="height:8px"></div>
+        <div class="small">حجم مقترح &lt; 100MB</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="viewerCard">
+        <div class="controls">
+          <div style="flex:1">
+            <div id="fileInfo" class="meta">لم يتم اختيار ملف</div>
+            <input id="fileInput" class="inputFile" type="file" accept=".glb,.gltf,.usdz" />
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button id="openBtn" class="btn">Open</button>
+            <button id="arBtn" class="btn ghost">Open in AR</button>
+            <button id="mrBtn" class="btn ghost">Toggle MR</button>
+            <button id="downloadBtn" class="btn ghost">Download</button>
+            <button id="shareBtn" class="btn ghost">Share</button>
+          </div>
+        </div>
+
+        <div id="viewerWrap">
+          <model-viewer id="viewer" class="left" src="" alt="3D model" camera-controls auto-rotate ar ar-modes="webxr scene-viewer quick-look" style="display:block"></model-viewer>
+          <model-viewer id="viewerRight" class="right" src="" alt="Right view" camera-controls auto-rotate ar ar-modes="webxr scene-viewer quick-look" style="display:none"></model-viewer>
+        </div>
+
+        <div class="footerRow">
+          <div class="meta" id="status">جاهز</div>
+          <div style="display:flex;gap:8px">
+            <button id="screenshotBtn" class="btn ghost">Screenshot</button>
+            <button id="voiceBtn" class="btn ghost">Voice</button>
+            <button id="removeBtn" class="btn ghost">Remove</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const viewer = document.getElementById('viewer');
+const viewerRight = document.getElementById('viewerRight');
+const openBtn = document.getElementById('openBtn');
+const arBtn = document.getElementById('arBtn');
+const mrBtn = document.getElementById('mrBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const shareBtn = document.getElementById('shareBtn');
+const screenshotBtn = document.getElementById('screenshotBtn');
+const voiceBtn = document.getElementById('voiceBtn');
+const removeBtn = document.getElementById('removeBtn');
+const status = document.getElementById('status');
+
+let currentFile = null;
+let currentBlob = null;
+let currentExt = '';
+let mrOn = false;
+const MAX_SIZE = 200 * 1024 * 1024; // 200MB ok if device can handle
+
+fileInput.addEventListener('change', (e) => {
+  const f = e.target.files?.[0];
+  if(!f) return;
+  if(f.size > MAX_SIZE){ alert('حجم الملف كبير — أقصى 200MB'); return; }
+  const ext = f.name.split('.').pop().toLowerCase();
+  if(!['glb','gltf','usdz'].includes(ext)){ alert('امتداد غير مدعوم'); return; }
+  currentFile = f;
+  currentExt = ext;
+  if(currentBlob) URL.revokeObjectURL(currentBlob);
+  currentBlob = URL.createObjectURL(f);
+  fileInfo.textContent = `${f.name} — ${Math.round(f.size/1024)} KB`;
+  status.textContent = 'جاهز للمعاينة';
+  setupPreview();
+});
+
+function setupPreview(){
+  if(!currentFile) return;
+  if(currentExt === 'usdz'){
+    viewer.style.display = 'none';
+    viewer.removeAttribute('src');
+    viewerRight.style.display = 'none';
+    status.textContent = 'USDZ جاهز — اضغط Open in AR على iPhone Safari (يفضل رفع الملف على HTTPS)';
+  } else {
+    viewer.setAttribute('src', currentBlob);
+    viewer.style.display = '';
+    viewerRight.style.display = mrOn ? '' : 'none';
+    viewerRight.setAttribute('src', currentBlob);
+    status.textContent = 'GLB معروض — يمكنك تفعيل MR (Toggle MR)';
+  }
+}
+
+openBtn.addEventListener('click', () => {
+  if(!currentFile) return alert('اختر ملفًا أولاً');
+  if(currentExt === 'usdz') {
+    window.location.href = currentBlob; // may work on iOS Safari, but HTTPS hosting is recommended
+  } else {
+    viewer.scrollIntoView({behavior:'smooth'});
+  }
+});
+
+arBtn.addEventListener('click', () => {
+  if(!currentFile) return alert('اختر ملفًا أولاً');
+  if(currentExt === 'usdz') {
+    window.location.href = currentBlob;
+  } else {
+    if(viewer && typeof viewer.enterAR === 'function'){
+      viewer.enterAR().catch(e => alert('تعذر دخول AR: ' + e.message));
+    } else {
+      alert('AR غير مدعوم في هذا المتصفح');
+    }
+  }
+});
+
+mrBtn.addEventListener('click', () => {
+  if(!currentFile) return alert('اختر ملفًا أولاً');
+  if(currentExt === 'usdz') return alert('MR متاح فقط لملفات GLB عبر المتصفح (USDZ يفتح Quick Look خارجي)');
+  mrOn = !mrOn;
+  viewerRight.style.display = mrOn ? '' : 'none';
+  document.documentElement.classList.toggle('split-on', mrOn);
+  status.textContent = mrOn ? 'MR ON — شاشة مقسومة' : 'MR OFF';
+});
+
+// sync camera-orbit from left to right (throttled)
+let lastSync = 0;
+viewer.addEventListener('camera-change', () => {
+  if(!mrOn) return;
+  const now = Date.now();
+  if(now - lastSync < 30) return;
+  lastSync = now;
+  const orbit = viewer.getAttribute('camera-orbit');
+  if(orbit) viewerRight.setAttribute('camera-orbit', orbit);
+});
+
+downloadBtn.addEventListener('click', () => {
+  if(!currentFile) return;
+  const a = document.createElement('a');
+  a.href = currentBlob;
+  a.download = currentFile.name;
+  a.click();
+});
+
+shareBtn.addEventListener('click', async () => {
+  if(!currentFile) return alert('اختر ملف أولاً');
+  try {
+    if(navigator.canShare && navigator.canShare({ files: [currentFile] })) {
+      await navigator.share({ files: [currentFile], title: currentFile.name });
+    } else {
+      prompt('انسخ الرابط المؤقت (مؤقت):', currentBlob);
+    }
+  } catch (e) {
+    alert('مشاركة فشلت: ' + e.message);
+  }
+});
+
+screenshotBtn.addEventListener('click', async () => {
+  try {
+    const node = document.getElementById('viewerWrap');
+    const canvas = await html2canvas(node, { backgroundColor: null });
+    const dataUrl = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = 'screenshot.png';
+    a.click();
+  } catch (e) {
+    alert('فشل أخذ لقطة: ' + e.message);
+  }
+});
+
+voiceBtn.addEventListener('click', () => {
+  const u = new SpeechSynthesisUtterance('تم عرض النموذج ثلاثي الأبعاد');
+  u.lang = 'ar-SA';
+  window.speechSynthesis.speak(u);
+});
+
+removeBtn.addEventListener('click', () => {
+  if(currentBlob) URL.revokeObjectURL(currentBlob);
+  currentBlob = null; currentFile = null; currentExt = '';
+  fileInfo.textContent = 'لم يتم اختيار ملف';
+  viewer.removeAttribute('src'); viewer.style.display = 'block';
+  viewerRight.removeAttribute('src'); viewerRight.style.display = 'none';
+  status.textContent = 'جاهز';
+});
+
+window.addEventListener('beforeunload', () => {
+  if(currentBlob) URL.revokeObjectURL(currentBlob);
+});
+</script>
+</body>
+</html>
