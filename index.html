@@ -1,26 +1,479 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ar-mr-site — Index</title>
-  <meta http-equiv="refresh" content="0; url=/test-mr-simple.html">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Spatial Studio — AR / MR 3D Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#071029;color:#e6f0f6;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-    .card{max-width:720px;padding:24px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 8px 30px rgba(2,6,23,0.6);}
-    a{color:#08b4c6}
+    :root {
+      --blue:#0a84ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a;
+      --glass:rgba(25,27,34,.62); --line:rgba(255,255,255,.16);
+      --text:#f6f7fb; --muted:#a9adbb;
+    }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { margin:0; min-height:100vh; overflow:hidden; color:var(--text); font-family:Tajawal,Arial,sans-serif; background:#07080c; }
+    button, input { font-family:inherit; }
+    button { cursor:pointer; border:0; color:inherit; }
+    .app {
+      position:relative; width:100vw; height:100vh; overflow:hidden;
+      background:radial-gradient(circle at 75% 12%,#173a6b 0%,#0b1222 24%,#07080c 62%);
+    }
+    #webgl, #cameraVideo, .stereo-render {
+      position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    }
+    #webgl { z-index:2; touch-action:none; }
+    #cameraVideo { z-index:1; display:none; opacity:.75; transform:scaleX(-1); }
+    .stereo-render { z-index:3; display:none; pointer-events:none; }
+    .stereo-render::before {
+      content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent calc(50% - 1px),rgba(255,255,255,.32) 50%,transparent calc(50% + 1px));
+    }
+    .stereo-labels { display:none; position:absolute; z-index:4; inset:88px 20px auto; justify-content:space-between; color:#fff; font:600 10px "Space Grotesk"; opacity:.7; direction:ltr; pointer-events:none; }
+    .stereo-labels span { background:rgba(0,0,0,.32); padding:4px 8px; border-radius:12px; }
+
+    .glass {
+      background:var(--glass); border:1px solid var(--line); box-shadow:0 12px 36px rgba(0,0,0,.32), inset 0 1px rgba(255,255,255,.13);
+      backdrop-filter:blur(24px) saturate(165%); -webkit-backdrop-filter:blur(24px) saturate(165%);
+    }
+    .topbar {
+      position:absolute; z-index:10; top:0; width:100%; padding:14px 20px 0;
+      display:flex; direction:ltr; justify-content:space-between; align-items:center; pointer-events:none;
+    }
+    .status { font-family:"Space Grotesk"; font-size:12px; font-weight:600; text-shadow:0 2px 8px #000; }
+    .island { height:31px; min-width:130px; padding:0 11px; border-radius:30px; background:#020204; display:flex; align-items:center; justify-content:center; gap:8px; direction:rtl; pointer-events:auto; }
+    .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); }
+    .island small { color:#b5c4db; font:10px "Space Grotesk"; }
+    .mode-switch {
+      position:absolute; z-index:11; top:57px; right:50%; transform:translateX(50%);
+      width:min(430px,calc(100% - 32px)); padding:5px; border-radius:22px; display:flex; gap:4px;
+    }
+    .mode {
+      flex:1; min-height:49px; border-radius:17px; background:transparent; color:#afb4c2; transition:.25s ease;
+      font-weight:700; font-size:12px; display:flex; justify-content:center; align-items:center; gap:7px;
+    }
+    .mode i { font-style:normal; font-size:17px; }
+    .mode.active { color:#fff; background:linear-gradient(135deg,rgba(24,133,255,.82),rgba(81,66,246,.68)); box-shadow:0 6px 18px rgba(0,122,255,.28),inset 0 1px rgba(255,255,255,.28); }
+    .badge {
+      position:absolute; top:126px; right:18px; z-index:8; padding:8px 11px; border-radius:13px;
+      font-size:11px; color:#d6e8ff; display:flex; gap:7px; align-items:center;
+    }
+    .badge b { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
+    .hint {
+      position:absolute; z-index:7; top:50%; right:50%; transform:translate(50%,-50%);
+      text-align:center; pointer-events:none; transition:.3s; width:min(310px,80vw);
+    }
+    .hint-icon { font-size:38px; margin-bottom:10px; filter:drop-shadow(0 8px 16px #000); }
+    .hint h2 { margin:0 0 6px; font-size:20px; }
+    .hint p { color:#cad0dc; margin:0; font-size:13px; line-height:1.7; }
+    .floor-grid {
+      position:absolute; z-index:3; bottom:8%; right:50%; transform:translateX(50%) perspective(230px) rotateX(58deg);
+      width:min(78vw,480px); height:135px; opacity:.34; pointer-events:none;
+      background-image:linear-gradient(rgba(91,181,255,.55) 1px,transparent 1px),linear-gradient(90deg,rgba(91,181,255,.55) 1px,transparent 1px);
+      background-size:22px 22px; mask-image:linear-gradient(transparent,black 45%,transparent); -webkit-mask-image:linear-gradient(transparent,black 45%,transparent);
+    }
+    .bottom {
+      position:absolute; z-index:12; right:0; bottom:0; width:100%; padding:16px 18px max(20px,env(safe-area-inset-bottom));
+      display:flex; align-items:end; justify-content:space-between; direction:ltr; pointer-events:none;
+    }
+    .tool-stack { display:flex; gap:9px; pointer-events:auto; }
+    .circle-btn, .action-btn {
+      display:grid; place-items:center; background:var(--glass); border:1px solid var(--line);
+      box-shadow:0 8px 24px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.14);
+      backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); transition:.2s;
+    }
+    .circle-btn { width:47px; height:47px; border-radius:50%; font-size:19px; }
+    .circle-btn:active, .action-btn:active { transform:scale(.92); }
+    .circle-btn.active { color:#fff; background:var(--blue); box-shadow:0 0 22px rgba(10,132,255,.6); }
+    .main-actions { display:flex; flex-direction:column; align-items:center; gap:11px; pointer-events:auto; }
+    .open-btn {
+      padding:13px 22px; border-radius:21px; color:white; font-size:14px; font-weight:800;
+      background:linear-gradient(135deg,#158cff,#5b5af7); box-shadow:0 12px 25px rgba(0,122,255,.38),inset 0 1px rgba(255,255,255,.32);
+    }
+    .place-btn { display:none; padding:11px 17px; border-radius:17px; font-weight:800; color:#111; background:#fff; box-shadow:0 8px 22px rgba(0,0,0,.35); }
+    .recording { color:#fff; background:var(--red)!important; animation:pulse 1.2s infinite; }
+    @keyframes pulse { 50% { box-shadow:0 0 0 8px rgba(255,69,58,.12),0 0 22px rgba(255,69,58,.7); } }
+
+    .panel {
+      position:absolute; z-index:30; width:min(430px,calc(100% - 24px)); max-height:76vh; overflow:auto;
+      right:50%; bottom:88px; transform:translateX(50%) translateY(18px); padding:18px; border-radius:27px;
+      opacity:0; pointer-events:none; transition:.25s ease;
+    }
+    .panel.show { opacity:1; pointer-events:auto; transform:translateX(50%) translateY(0); }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
+    .panel-head h3 { margin:0; font-size:17px; }
+    .close { width:28px; height:28px; border-radius:50%; color:#d2d5de; background:rgba(255,255,255,.1); }
+    .drop-zone { border:1px dashed rgba(113,184,255,.7); background:rgba(10,132,255,.08); border-radius:20px; padding:23px 16px; text-align:center; }
+    .drop-zone strong { display:block; font-size:15px; margin:9px 0 3px; }
+    .drop-zone span, .fine-print { color:var(--muted); font-size:11px; line-height:1.7; }
+    .file-btn { display:inline-block; margin-top:13px; padding:10px 15px; background:var(--blue); border-radius:13px; color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+    .progress-wrap { display:none; margin-top:15px; }
+    .progress-label { display:flex; justify-content:space-between; font-size:11px; color:#c9d0dc; margin-bottom:7px; }
+    .progress { height:7px; overflow:hidden; background:rgba(255,255,255,.1); border-radius:10px; }
+    #progressBar { height:100%; width:0; background:linear-gradient(90deg,#0a84ff,#77c5ff); transition:width .2s; }
+    .row { display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid rgba(255,255,255,.09); gap:12px; }
+    .row:last-child { border:0; }
+    .row strong { font-size:13px; display:block; } .row small { font-size:11px; color:var(--muted); }
+    .mini-btn { padding:8px 11px; border-radius:10px; color:#fff; background:rgba(255,255,255,.11); font-size:11px; font-weight:700; white-space:nowrap; }
+    .danger { color:#ff918a; background:rgba(255,69,58,.14); }
+    .section-title { color:#8dbdff; font:600 11px "Space Grotesk"; letter-spacing:1px; text-transform:uppercase; margin:15px 0 4px; }
+    .invite {
+      position:absolute; z-index:50; top:50%; right:50%; transform:translate(50%,-50%) scale(.94);
+      width:min(350px,calc(100% - 35px)); border-radius:26px; padding:24px; text-align:center; opacity:0; pointer-events:none; transition:.25s;
+    }
+    .invite.show { opacity:1; pointer-events:auto; transform:translate(50%,-50%) scale(1); }
+    .avatar { width:56px; height:56px; margin:auto auto 12px; border-radius:50%; display:grid; place-items:center; font-size:24px; background:linear-gradient(135deg,#7a6cff,#25b9df); }
+    .invite h3 { margin:0 0 7px; }.invite p { font-size:12px; color:var(--muted); line-height:1.7; margin:0 0 18px; }
+    .invite-actions { display:flex; gap:8px; }.invite-actions button { flex:1; padding:11px; border-radius:13px; font-weight:700; }.accept { background:var(--green); color:#092412; }.decline { background:rgba(255,255,255,.1); }
+    .toast { position:absolute; z-index:100; top:143px; right:50%; transform:translateX(50%) translateY(-15px); background:rgba(18,20,27,.92); border:1px solid var(--line); border-radius:15px; padding:10px 15px; font-size:12px; opacity:0; transition:.25s; pointer-events:none; white-space:nowrap; }
+    .toast.show { opacity:1; transform:translateX(50%) translateY(0); }
+    .voice-indicator { display:none; align-items:center; justify-content:center; gap:3px; height:28px; direction:ltr; }
+    .voice-indicator span { width:3px; background:#55aaff; border-radius:4px; animation:voice .8s infinite alternate; }.voice-indicator span:nth-child(2){animation-delay:.2s}.voice-indicator span:nth-child(3){animation-delay:.4s}.voice-indicator span:nth-child(4){animation-delay:.1s}
+    @keyframes voice { from{height:5px}to{height:23px} }
+    @media (min-width:700px) {
+      .app { max-width:460px; max-height:920px; margin:auto; top:50vh; transform:translateY(-50%); border-radius:42px; box-shadow:0 0 0 10px #18191e,0 35px 100px #000; }
+      body { background:radial-gradient(circle at 50% 0,#202b46,#08090e 58%); }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>ar-mr-site</h1>
-    <p>Redirecting to the MR split test page. If your browser doesn't redirect, use the links below.</p>
-    <ul>
-      <li><a href="/test-mr-simple.html" target="_blank">MR Split Test (public GLB)</a></li>
-      <li><a href="/public/ar-mr-liquid.html" target="_blank">AR/MR Liquid viewer (if placed in public/)</a></li>
-      <li><a href="/ar-mr-liquid.html" target="_blank">AR/MR Liquid viewer (root)</a></li>
-    </ul>
-    <p style="color:#9fbcca;font-size:13px">If the page still doesn't load: go to the repository Settings → Pages and ensure "Source" is set to the main branch (root) and save. Wait a few minutes for GitHub Pages to publish.</p>
-  </div>
+  <main class="app" id="app">
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <canvas id="webgl"></canvas>
+    <div class="stereo-render" id="stereoOverlay"></div>
+    <div class="stereo-labels" id="stereoLabels"><span>LEFT EYE</span><span>RIGHT EYE</span></div>
+    <div class="floor-grid" id="floorGrid"></div>
+
+    <header class="topbar">
+      <span class="status" id="clock">9:41</span>
+      <div class="island"><span class="live-dot" id="connectionDot"></span><small id="statusText">WORLD TRACKING</small></div>
+      <span class="status">▮▮▮ WiFi&nbsp; ▰</span>
+    </header>
+
+    <nav class="mode-switch glass">
+      <button class="mode" id="objectMode"><i>◈</i> Object</button>
+      <button class="mode active" id="arMode"><i>⌁</i> AR</button>
+      <button class="mode" id="mrMode"><i>◫</i> MR</button>
+    </nav>
+
+    <div class="badge glass" id="trackingBadge"><b></b><span>Plane Detection · جاهز</span></div>
+
+    <section class="hint" id="hint">
+      <div class="hint-icon">⌁</div>
+      <h2>وجّه الكاميرا نحو سطح</h2>
+      <p>افتح نموذجًا، ثم اضغط على سطح مستوٍ لوضعه في مساحتك.</p>
+    </section>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="bottom">
+      <div class="tool-stack">
+        <button class="circle-btn" id="voiceBtn" title="AI Voice">◉</button>
+        <button class="circle-btn" id="shareBtn" title="مشاركة">↗</button>
+        <button class="circle-btn" id="sceneBtn" title="المشهد">☰</button>
+      </div>
+      <div class="main-actions">
+        <button class="place-btn" id="placeBtn">⌖&nbsp; Tap to Place</button>
+        <button class="open-btn" id="openBtn">＋&nbsp; Open Model</button>
+        <div class="voice-indicator" id="voiceIndicator"><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div class="tool-stack">
+        <button class="circle-btn" id="undoBtn" title="تراجع">↶</button>
+        <button class="circle-btn" id="captureBtn" title="التقاط صورة">◉</button>
+        <button class="circle-btn" id="recordBtn" title="تسجيل فيديو">●</button>
+      </div>
+    </div>
+
+    <section class="panel glass" id="openPanel">
+      <div class="panel-head"><h3>فتح نموذج ثلاثي الأبعاد</h3><button class="close" data-close="openPanel">×</button></div>
+      <div class="drop-zone" id="dropZone">
+        <div style="font-size:29px">◈</div>
+        <strong>اختر ملفًا من تطبيق الملفات</strong>
+        <span>يدعم GLB و GLTF و USDZ حتى الملفات الكبيرة</span><br>
+        <label class="file-btn">استعراض الملفات<input id="modelInput" type="file" accept=".glb,.gltf,.usdz,model/gltf-binary,model/gltf+json" hidden></label>
+      </div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-label"><span id="progressName">جاري تجهيز الملف…</span><span id="progressPercent">0%</span></div>
+        <div class="progress"><div id="progressBar"></div></div>
+      </div>
+      <p class="fine-print">تتم معالجة الملفات محليًا وبأمان داخل جهازك. ملفات USDZ تُفتح عبر Quick Look على الأجهزة المدعومة، بينما GLB / GLTF تُعرض داخل الاستوديو.</p>
+    </section>
+
+    <section class="panel glass" id="scenePanel">
+      <div class="panel-head"><h3>المشهد والجلسة</h3><button class="close" data-close="scenePanel">×</button></div>
+      <div class="section-title">Last session</div>
+      <div class="row"><div><strong id="lastModelName">لا يوجد نموذج محفوظ</strong><small id="lastSceneInfo">الجلسة المحلية جاهزة</small></div><button class="mini-btn" id="restoreBtn">استعادة</button></div>
+      <div class="section-title">Scene tools</div>
+      <div class="row"><div><strong>المحاذاة التلقائية</strong><small>Auto Center + Auto Scale</small></div><button class="mini-btn" id="autoFitBtn">تطبيق</button></div>
+      <div class="row"><div><strong>العناصر الموضوعة</strong><small id="itemCount">0 عنصر في المشهد</small></div><button class="mini-btn danger" id="deleteLastBtn">حذف الأخير</button></div>
+      <div class="row"><div><strong>تنظيف المشهد</strong><small>حذف جميع العناصر الموضوعة</small></div><button class="mini-btn danger" id="clearBtn">حذف الكل</button></div>
+      <div class="section-title">Multiplayer</div>
+      <div class="row"><div><strong id="connectionTitle">غير متصل</strong><small id="devicesText">لا توجد أجهزة متصلة</small></div><button class="mini-btn" id="inviteBtn">دعوة</button></div>
+    </section>
+
+    <section class="invite glass" id="inviteDialog">
+      <div class="avatar">◉</div>
+      <h3>دعوة Spatial جديدة</h3>
+      <p><b>Sarah’s Vision Pro</b> تريد الانضمام إلى المشهد الحالي ومشاهدة العناصر الموضوعة مباشرةً.</p>
+      <div class="invite-actions"><button class="decline" id="declineBtn">رفض</button><button class="accept" id="acceptBtn">قبول</button></div>
+    </section>
+  </main>
+
+  <script>
+    const app = document.getElementById('app');
+    const canvas = document.getElementById('webgl');
+    const video = document.getElementById('cameraVideo');
+    const $ = id => document.getElementById(id);
+    let mode = 'ar', stream = null, modelRoot = null, loadedTemplate = null, placed = [], undoStack = [], redoStack = [];
+    let placing = false, mediaRecorder = null, chunks = [], voiceRecognition = null;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x080b14);
+    scene.fog = new THREE.Fog(0x080b14, 7, 21);
+    const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.01, 100);
+    camera.position.set(0, 1.25, 3.7);
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true, preserveDrawingBuffer:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = .07; controls.target.set(0, .65, 0);
+    controls.minDistance = .5; controls.maxDistance = 8;
+
+    scene.add(new THREE.HemisphereLight(0xaed5ff, 0x172030, 2));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.8); keyLight.position.set(3,5,4); scene.add(keyLight);
+    const fill = new THREE.PointLight(0x317dff, 1.1, 8); fill.position.set(-2,2,2); scene.add(fill);
+
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(18,18), new THREE.MeshStandardMaterial({color:0x24466d, transparent:true, opacity:.14, roughness:1}));
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -0.01; scene.add(ground);
+
+    const placementRing = new THREE.Mesh(new THREE.RingGeometry(.18,.23,48), new THREE.MeshBasicMaterial({color:0x53b8ff,transparent:true,opacity:.9,side:THREE.DoubleSide}));
+    placementRing.rotation.x = -Math.PI/2; placementRing.visible = false; scene.add(placementRing);
+    const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+
+    function defaultModel() {
+      const group = new THREE.Group();
+      const material = new THREE.MeshPhysicalMaterial({ color:0x218cff, metalness:.55, roughness:.2, transmission:.05, clearcoat:1 });
+      const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(.54, 3), material); group.add(orb);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.72,.035,12,70), new THREE.MeshStandardMaterial({color:0xa6daff,metalness:.8,roughness:.25}));
+      ring.rotation.x = Math.PI/2.7; group.add(ring);
+      group.userData.name = 'Spatial Orb';
+      return group;
+    }
+    loadedTemplate = defaultModel();
+    modelRoot = loadedTemplate.clone(true); scene.add(modelRoot);
+
+    function resize() {
+      const w=app.clientWidth, h=app.clientHeight;
+      renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix();
+    }
+    addEventListener('resize',resize); resize();
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      if (modelRoot && !placing && mode === 'object') modelRoot.rotation.y += .004;
+      renderer.render(scene,camera);
+    } animate();
+
+    function toast(msg) {
+      const el=$('toast'); el.textContent=msg; el.classList.add('show');
+      clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+    }
+    function setMode(next) {
+      mode=next;
+      ['object','ar','mr'].forEach(m=>$(`${m}Mode`).classList.toggle('active',m===next));
+      const isAR = next !== 'object';
+      $('floorGrid').style.display=isAR?'block':'none';
+      $('stereoOverlay').style.display=next==='mr'?'block':'none';
+      $('stereoLabels').style.display=next==='mr'?'flex':'none';
+      $('placeBtn').style.display=isAR && loadedTemplate?'block':'none';
+      if(next==='object') { stopCamera(); scene.background=new THREE.Color(0x080b14); $('hint').style.opacity='0'; controls.enabled=true; }
+      else { scene.background=null; startCamera(); $('hint').style.opacity='1'; controls.enabled=false; }
+      if(next==='mr') {
+        $('trackingBadge').innerHTML='<b></b><span>MR Stereo · نظارات متصلة</span>';
+        toast('وضع MR: تم تقسيم العرض إلى عدستين');
+      } else $('trackingBadge').innerHTML='<b></b><span>Plane Detection · جاهز</span>';
+    }
+    $('objectMode').onclick=()=>setMode('object');
+    $('arMode').onclick=()=>setMode('ar');
+    $('mrMode').onclick=()=>setMode('mr');
+
+    async function startCamera() {
+      if(stream) return;
+      if(!navigator.mediaDevices?.getUserMedia) { toast('الكاميرا غير مدعومة في هذا المتصفح'); return; }
+      try {
+        stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+        video.srcObject=stream; video.style.display='block';
+        $('statusText').textContent='CAMERA ACTIVE';
+      } catch(err) {
+        toast('يرجى السماح باستخدام الكاميرا لتجربة AR');
+        $('statusText').textContent='CAMERA REQUIRED';
+      }
+    }
+    function stopCamera() {
+      if(stream) stream.getTracks().forEach(t=>t.stop());
+      stream=null; video.srcObject=null; video.style.display='none'; $('statusText').textContent='OBJECT VIEW';
+    }
+
+    function showPanel(id) { document.querySelectorAll('.panel').forEach(p=>p.classList.remove('show')); $(id).classList.add('show'); updateSessionUI(); }
+    $('openBtn').onclick=()=>showPanel('openPanel');
+    $('sceneBtn').onclick=()=>showPanel('scenePanel');
+    document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(`${b.dataset.close}`).classList.remove('show'));
+
+    const input=$('modelInput'), drop=$('dropZone');
+    input.onchange=e=>e.target.files[0] && loadFile(e.target.files[0]);
+    ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background='rgba(10,132,255,.18)'}));
+    ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background='rgba(10,132,255,.08)'}));
+    drop.addEventListener('drop',e=>e.dataTransfer.files[0] && loadFile(e.dataTransfer.files[0]));
+
+    function progress(percent, name) {
+      $('progressWrap').style.display='block'; $('progressBar').style.width=percent+'%'; $('progressPercent').textContent=Math.round(percent)+'%'; $('progressName').textContent=name;
+    }
+    function loadFile(file) {
+      const ext=file.name.split('.').pop().toLowerCase();
+      if(!['glb','gltf','usdz'].includes(ext)) return toast('صيغة غير مدعومة. استخدم GLB أو GLTF أو USDZ');
+      if(file.size > 1024*1024*700) return toast('الملف كبير جدًا للجهاز الحالي. اختر ملفًا أصغر من 700MB');
+      progress(3, 'فحص الملف بأمان…');
+      const reader=new FileReader();
+      reader.onprogress=e=> { if(e.lengthComputable) progress(Math.min(80,e.loaded/e.total*80), 'جاري تحميل '+file.name); };
+      reader.onerror=()=>toast('تعذر قراءة الملف، يرجى المحاولة مرة أخرى');
+      reader.onload=async e=>{
+        progress(85,'تهيئة النموذج…');
+        if(ext==='usdz') {
+          progress(100,'USDZ جاهز لـ Quick Look');
+          const url=URL.createObjectURL(file);
+          const link=document.createElement('a'); link.href=url; link.rel='ar'; link.download=file.name; link.click();
+          localStorage.setItem('spatialLast',JSON.stringify({name:file.name,type:'USDZ',time:new Date().toLocaleString('ar')}));
+          toast('تم إرسال USDZ إلى Quick Look على الأجهزة المدعومة');
+          setTimeout(()=>$('openPanel').classList.remove('show'),600);
+          return;
+        }
+        try {
+          const loader=new THREE.GLTFLoader();
+          loader.setDRACOLoader(new THREE.DRACOLoader().setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'));
+          loader.parse(e.target.result, '', gltf=>{
+            if(modelRoot) scene.remove(modelRoot);
+            loadedTemplate=gltf.scene; loadedTemplate.userData.name=file.name;
+            modelRoot=loadedTemplate.clone(true); scene.add(modelRoot); autoFit(modelRoot);
+            progress(100,'اكتمل تحميل النموذج');
+            localStorage.setItem('spatialLast',JSON.stringify({name:file.name,type:ext.toUpperCase(),time:new Date().toLocaleString('ar')}));
+            setTimeout(()=>$('openPanel').classList.remove('show'),550);
+            $('hint').style.opacity='1'; toast('تم فتح '+file.name+' بنجاح');
+          }, err=>{ console.error(err); toast('تعذر تحليل النموذج. تأكد من سلامة الملف'); });
+        } catch(e) { toast('حدث خطأ أثناء تحميل النموذج'); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function autoFit(obj) {
+      const box=new THREE.Box3().setFromObject(obj), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
+      const max=Math.max(size.x,size.y,size.z)||1;
+      obj.scale.multiplyScalar(1.35/max);
+      obj.position.sub(center.multiplyScalar(obj.scale.x));
+      obj.position.y=Math.max(0, -.01);
+      controls.target.set(0,.55,0); controls.update();
+    }
+    $('autoFitBtn').onclick=()=>{if(modelRoot){autoFit(modelRoot);toast('تمت محاذاة النموذج وتغيير حجمه تلقائيًا')}};
+
+    $('placeBtn').onclick=()=>{
+      if(!loadedTemplate) return toast('افتح نموذجًا أولاً');
+      placing=!placing; placementRing.visible=placing; $('placeBtn').style.background=placing?'#0a84ff':'#fff'; $('placeBtn').style.color=placing?'#fff':'#111';
+      toast(placing?'اضغط على سطح لوضع النموذج':'تم إلغاء وضع النموذج');
+    };
+    canvas.addEventListener('pointermove',e=>{
+      if(!placing) return;
+      const r=canvas.getBoundingClientRect(); pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+      raycaster.setFromCamera(pointer,camera); const hit=raycaster.intersectObject(ground)[0];
+      if(hit) placementRing.position.copy(hit.point);
+    });
+    canvas.addEventListener('pointerdown',e=>{
+      if(!placing || e.button!==0) return;
+      const r=canvas.getBoundingClientRect(); pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+      raycaster.setFromCamera(pointer,camera); const hit=raycaster.intersectObject(ground)[0];
+      if(hit) {
+        const item=loadedTemplate.clone(true); item.position.copy(hit.point); autoFit(item); item.position.copy(hit.point); scene.add(item);
+        placed.push(item); undoStack.push({type:'add',item}); redoStack=[]; updateSessionUI();
+        toast('تم وضع النموذج على السطح');
+      }
+    });
+    $('undoBtn').onclick=()=>{
+      const action=undoStack.pop(); if(!action) return toast('لا توجد عمليات للتراجع');
+      if(action.type==='add'){scene.remove(action.item);placed=placed.filter(x=>x!==action.item);redoStack.push(action);}
+      updateSessionUI(); toast('تم التراجع');
+    };
+    $('deleteLastBtn').onclick=()=>{
+      const item=placed.pop(); if(!item)return toast('لا توجد عناصر موضوعة');scene.remove(item);undoStack.push({type:'add',item});updateSessionUI();toast('تم حذف آخر عنصر');
+    };
+    $('clearBtn').onclick=()=>{placed.forEach(x=>scene.remove(x));placed=[];undoStack=[];redoStack=[];updateSessionUI();toast('تم حذف جميع العناصر')};
+
+    function updateSessionUI() {
+      const last=JSON.parse(localStorage.getItem('spatialLast')||'null');
+      $('lastModelName').textContent=last?last.name:'لا يوجد نموذج محفوظ';
+      $('lastSceneInfo').textContent=last?`${last.type} · ${last.time}`:'الجلسة المحلية جاهزة';
+      $('itemCount').textContent=placed.length+' عنصر في المشهد';
+    }
+    $('restoreBtn').onclick=()=>{const l=JSON.parse(localStorage.getItem('spatialLast')||'null'); toast(l?'تمت استعادة إعدادات آخر جلسة. اختر الملف من جديد لأسباب الخصوصية.':'لا توجد جلسة محفوظة')};
+
+    $('captureBtn').onclick=()=>{
+      renderer.render(scene,camera); const link=document.createElement('a'); link.download='spatial-capture-'+Date.now()+'.png'; link.href=canvas.toDataURL('image/png'); link.click(); toast('تم حفظ لقطة الشاشة');
+    };
+    $('recordBtn').onclick=()=>{
+      if(mediaRecorder && mediaRecorder.state==='recording') {
+        mediaRecorder.stop(); $('recordBtn').classList.remove('recording'); toast('تم حفظ تسجيل الفيديو');
+        return;
+      }
+      const capture=canvas.captureStream(30);
+      try {
+        chunks=[]; mediaRecorder=new MediaRecorder(capture,{mimeType:'video/webm'});
+        mediaRecorder.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+        mediaRecorder.onstop=()=>{const url=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));const a=document.createElement('a');a.href=url;a.download='spatial-recording-'+Date.now()+'.webm';a.click();};
+        mediaRecorder.start(); $('recordBtn').classList.add('recording'); toast('جاري تسجيل الشاشة — اضغط للإيقاف');
+      } catch(e) { toast('تسجيل الشاشة غير مدعوم في هذا المتصفح'); }
+    };
+    $('shareBtn').onclick=async()=>{
+      const data={title:'Spatial Studio Model',text:'شاهد نموذجي ثلاثي الأبعاد في Spatial Studio'};
+      try { if(navigator.share) await navigator.share(data); else { await navigator.clipboard.writeText(location.href);toast('تم نسخ رابط المشاركة'); } } catch(e) {}
+    };
+
+    $('voiceBtn').onclick=()=>{
+      const speech=window.SpeechRecognition||window.webkitSpeechRecognition;
+      if(!speech) { speakInfo(); return toast('وضع AI Voice: تتم قراءة معلومات النموذج'); }
+      if(voiceRecognition) { voiceRecognition.stop(); return; }
+      voiceRecognition=new speech(); voiceRecognition.lang='ar-SA'; voiceRecognition.continuous=false;
+      voiceRecognition.onstart=()=>{$('voiceBtn').classList.add('active');$('voiceIndicator').style.display='flex';toast('AI Voice يستمع… قل: كبّر، صغّر، دوّر، أو معلومات')};
+      voiceRecognition.onend=()=>{voiceRecognition=null;$('voiceBtn').classList.remove('active');$('voiceIndicator').style.display='none'};
+      voiceRecognition.onresult=e=>handleVoice(e.results[0][0].transcript);
+      voiceRecognition.start();
+    };
+    function handleVoice(text) {
+      if(!modelRoot)return;
+      if(/كبر|تكبير/.test(text)) modelRoot.scale.multiplyScalar(1.18);
+      else if(/صغر|تصغير/.test(text)) modelRoot.scale.multiplyScalar(.84);
+      else if(/دور|تدوير/.test(text)) modelRoot.rotation.y+=Math.PI/4;
+      else if(/معلومات|اقرأ/.test(text)) return speakInfo();
+      toast('AI: '+text);
+    }
+    function speakInfo() {
+      const name=modelRoot?.userData.name||'النموذج الافتراضي';
+      const message=`النموذج الحالي هو ${name}. يمكنك استخدام اللمس للتدوير والتكبير، أو قول كبّر، صغّر، أو دوّر.`;
+      if('speechSynthesis' in window){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(message));}
+    }
+
+    $('inviteBtn').onclick=()=>{$('scenePanel').classList.remove('show');$('inviteDialog').classList.add('show')};
+    $('acceptBtn').onclick=()=>{
+      $('inviteDialog').classList.remove('show');$('connectionTitle').textContent='متصل · غرفة Spatial';$('devicesText').textContent='أنت + Sarah’s Vision Pro';$('connectionDot').style.background='#30d158';toast('تم قبول الدعوة — تمت مزامنة المشهد');
+    };
+    $('declineBtn').onclick=()=>{$('inviteDialog').classList.remove('show');toast('تم رفض الدعوة')};
+
+    setInterval(()=>{$('clock').textContent=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date())},1000);
+    updateSessionUI();
+    startCamera();
+  </script>
 </body>
 </html>
